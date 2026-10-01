@@ -1,0 +1,18 @@
+{
+  "name": "multi-workspace-document-assistant",
+  "version": "1.0.0",
+  "description": "Multi-Workspace Document Assistant with RAG and Tool Calling",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "@openai/agents": "^0.18.0",
+    "dotenv": "^18.0.5",
+    "express": "^4.21.2",
+    "multer": "^2.0.2",
+    "pg": "^8.13.1",
+    "zod": "^4.6.5"
+  }
+}

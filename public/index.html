@@ -1,0 +1,159 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Multi-Workspace Document Assistant</title>
+  <style>
+    :root { --bg:#f7f8fb; --panel:#fff; --line:#d9e0ea; --text:#172033; --muted:#667085; --accent:#2563eb; --accent-dark:#1d4ed8; --shadow:0 1px 3px rgba(15,23,42,.08); }
+    * { box-sizing:border-box; }
+    body { margin:0; min-height:100vh; font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; background:var(--bg); color:var(--text); }
+    header { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:18px 24px; background:var(--panel); border-bottom:1px solid var(--line); }
+    h1 { margin:0; font-size:1.25rem; } h2,h3 { margin:0 0 12px; }
+    button { min-height:38px; padding:0 14px; border:1px solid transparent; border-radius:7px; background:var(--accent); color:#fff; font-weight:650; cursor:pointer; }
+    button:hover { background:var(--accent-dark); } button.secondary { background:#eef2f7; color:#263143; border-color:#d7dee8; } button.secondary:hover { background:#e1e7f0; }
+    input { width:100%; min-height:38px; padding:8px 10px; border:1px solid var(--line); border-radius:7px; background:#fff; color:var(--text); font:inherit; }
+    input:focus { outline:2px solid rgba(37,99,235,.18); border-color:var(--accent); }
+    main { display:grid; grid-template-columns:300px minmax(0,1fr); gap:18px; padding:18px; max-width:1280px; margin:0 auto; }
+    @media (max-width:860px) { main { grid-template-columns:1fr; } header { align-items:flex-start; flex-direction:column; } }
+    .panel { background:var(--panel); border:1px solid var(--line); border-radius:8px; box-shadow:var(--shadow); padding:16px; margin-bottom:14px; }
+    .stack { display:grid; gap:10px; } .row { display:flex; gap:8px; align-items:center; min-width:0; } .row > input { flex:1; min-width:0; } .workspace-create { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:8px; margin-top:12px; width:100%; } @media (max-width:420px) { .workspace-create { grid-template-columns:1fr; } .workspace-create button { width:100%; } }
+    .muted { color:var(--muted); font-size:.88rem; } .error { color:#b42318; font-size:.88rem; min-height:20px; }
+    .workspace-button { width:100%; text-align:left; justify-content:flex-start; background:#fff; color:var(--text); border-color:var(--line); margin-bottom:8px; }
+    .workspace-button:hover { background:#f2f5f9; } .workspace-button.active { color:var(--accent); border-color:var(--accent); background:#eff6ff; }
+    .pill { display:inline-flex; align-items:center; min-height:28px; padding:4px 9px; border-radius:999px; background:#eef2f7; color:#344054; font-size:.82rem; margin:0 6px 6px 0; }
+    .chat-box { min-height:300px; max-height:54vh; overflow:auto; padding:12px; border:1px solid var(--line); border-radius:8px; background:#fafbfe; }
+    .message { max-width:86%; padding:10px 12px; border-radius:8px; margin-bottom:10px; white-space:pre-wrap; line-height:1.45; }
+.message.user { margin-left:auto; background:#dbeafe; color:#1e3a8a; } .message.assistant { margin-right:auto; background:#fff; border:1px solid #e5eaf2; } .message.loading { display:flex; align-items:center; gap:8px; color:var(--muted); } .spinner { width:16px; height:16px; border:2px solid #d9e0ea; border-top-color:var(--accent); border-radius:50%; animation:spin .8s linear infinite; flex:0 0 auto; } @keyframes spin { to { transform:rotate(360deg); } }
+    .label { display:block; margin-bottom:4px; color:var(--muted); font-size:.72rem; font-weight:800; text-transform:uppercase; }
+    .log-item,.task-item { padding:10px; border:1px solid var(--line); border-radius:7px; background:#fbfcff; margin-bottom:8px; overflow-wrap:anywhere; }
+    .log-item code { display:block; white-space:pre-wrap; font-size:.8rem; color:#344054; }
+    .auth-shell { max-width:420px; margin:72px auto; padding:0 16px; } #app-view,#auth-view { display:none; }
+  </style>
+</head>
+<body>
+  <header>
+    <div><h1>Multi-Workspace Document Assistant</h1><div class="muted">Workspace-scoped documents, chat, tasks, and tool audit log</div></div>
+    <div id="user-header" class="row"><span id="user-email" class="muted"></span><button class="secondary" type="button" onclick="logout()">Logout</button></div>
+  </header>
+
+  <div id="auth-view" class="auth-shell">
+    <section class="panel stack">
+      <h2>Sign In</h2>
+      <input id="auth-email" type="email" autocomplete="email" placeholder="Email">
+      <input id="auth-password" type="password" autocomplete="current-password" placeholder="Password">
+      <div class="row"><button type="button" onclick="submitAuth('login')">Login</button><button class="secondary" type="button" onclick="submitAuth('register')">Register</button></div>
+      <div id="auth-error" class="error"></div>
+      <div class="muted">Demo: demo@example.com / demo123</div>
+    </section>
+  </div>
+
+  <main id="app-view">
+    <aside>
+<section class="panel"><h3>Workspaces</h3><div id="workspace-list" class="stack"></div><div class="workspace-create"><input id="new-workspace" type="text" placeholder="New workspace"><button type="button" onclick="createWorkspace()">Create</button></div></section>
+      <section class="panel"><h3>Tasks</h3><div id="tasks-list" class="muted">No tasks yet.</div></section>
+    </aside>
+    <section>
+      <section class="panel">
+        <div class="row" style="justify-content:space-between; align-items:start;"><h2 id="workspace-title">Workspace</h2><span class="pill">Tenant isolated</span></div>
+        <div style="margin:8px 0 12px;"><span class="label">Documents</span><div id="documents-list" class="muted">No documents.</div></div>
+        <div class="row"><input id="doc-file" type="file" accept=".txt,.md,.csv,.json"><button type="button" onclick="uploadDocument()">Upload</button></div>
+        <div id="upload-status" class="muted" style="margin-top:8px;"></div>
+      </section>
+      <section class="panel">
+        <h3>Chat</h3><div id="chat-box" class="chat-box"></div>
+        <div class="row" style="margin-top:10px;"><input id="chat-input" type="text" placeholder="Ask this workspace"><button type="button" onclick="sendChat()">Ask</button></div>
+        <div style="margin-top:8px;"><button class="secondary" type="button" onclick="suggest('What is the roadmap?')">Roadmap</button> <button class="secondary" type="button" onclick="suggest('Create task: review deployment checklist')">Task</button> <button class="secondary" type="button" onclick="suggest('Send notification #dev-alerts: system health nominal')">Notify</button></div>
+        <div id="chat-error" class="error"></div>
+      </section>
+      <section class="panel"><h3>Tool Audit Log</h3><div id="tools-log" class="muted">No tool calls yet.</div></section>
+    </section>
+  </main>
+
+  <script>
+    let activeWorkspace = null;
+    let activeWorkspaceName = '';
+    const el = (id) => document.getElementById(id);
+
+    async function api(url, options = {}) {
+      const res = await fetch(url, options);
+      let data = {};
+      try { data = await res.json(); } catch {}
+      if (res.status === 401) { showAuth(); throw new Error('Login required'); }
+      if (!res.ok) throw new Error(data.error || 'Request failed');
+      return data;
+    }
+    function showAuth() { el('auth-view').style.display = 'block'; el('app-view').style.display = 'none'; el('user-header').style.display = 'none'; }
+    function showApp() { el('auth-view').style.display = 'none'; el('app-view').style.display = 'grid'; el('user-header').style.display = 'flex'; }
+
+    async function checkAuth() {
+      try { const data = await api('/api/auth/me'); el('user-email').textContent = data.user.email; showApp(); await loadWorkspaces(); }
+      catch { showAuth(); }
+    }
+    async function submitAuth(mode) {
+      el('auth-error').textContent = '';
+      try {
+        await api('/api/auth/' + mode, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ email:el('auth-email').value.trim(), password:el('auth-password').value }) });
+        await checkAuth();
+      } catch (err) { el('auth-error').textContent = err.message; }
+    }
+    async function logout() { await api('/api/auth/logout', { method:'POST' }); activeWorkspace = null; showAuth(); }
+
+    async function loadWorkspaces() {
+      const workspaces = await api('/api/workspaces');
+      const list = el('workspace-list');
+      if (!workspaces.length) { list.innerHTML = '<div class="muted">No workspaces.</div>'; activeWorkspace = null; return; }
+      list.innerHTML = workspaces.map((w) => `<button class="workspace-button ${w.id === activeWorkspace ? 'active' : ''}" type="button" onclick="selectWorkspace('${escapeAttr(w.id)}','${escapeAttr(w.name)}')">${escapeHtml(w.name)}</button>`).join('');
+      if (!activeWorkspace || !workspaces.some((w) => w.id === activeWorkspace)) await selectWorkspace(workspaces[0].id, workspaces[0].name);
+    }
+    async function selectWorkspace(id, name) {
+      activeWorkspace = id; activeWorkspaceName = name; el('workspace-title').textContent = name;
+      document.querySelectorAll('.workspace-button').forEach((button) => button.classList.toggle('active', button.textContent === name));
+      const [documents, activity] = await Promise.all([api('/api/workspaces/' + encodeURIComponent(id) + '/documents'), api('/api/workspaces/' + encodeURIComponent(id) + '/activity')]);
+      renderDocuments(documents); renderChat(activity.messages); renderTools(activity.tools); renderTasks(activity.tasks);
+    }
+    function renderDocuments(documents) { el('documents-list').innerHTML = documents.length ? documents.map((doc) => `<span class="pill">${escapeHtml(doc.name)}</span>`).join('') : '<span class="muted">No documents.</span>'; }
+    function renderChat(messages) {
+      const box = el('chat-box');
+      if (!messages.length) { box.innerHTML = '<div class="muted">No messages.</div>'; return; }
+      box.innerHTML = messages.map((message) => `<div class="message ${escapeAttr(message.role)}"><span class="label">${escapeHtml(message.role)}</span>${escapeHtml(message.content)}</div>`).join('');
+      box.scrollTop = box.scrollHeight;
+    }
+    function showAcceptedInput(question) {
+      const box = el('chat-box');
+      box.innerHTML += `<div class="message user"><span class="label">user</span>${escapeHtml(question)}</div><div class="message assistant loading"><span class="spinner" aria-hidden="true"></span><span>Your input has been accepted.</span></div>`;
+      box.scrollTop = box.scrollHeight;
+    }
+    function renderTools(tools) { el('tools-log').innerHTML = tools.length ? tools.map((tool) => `<div class="log-item"><strong>${escapeHtml(tool.tool)}</strong><code>args: ${escapeHtml(JSON.stringify(tool.arguments))}</code><code>result: ${escapeHtml(JSON.stringify(tool.result))}</code><div class="muted">${new Date(tool.created_at).toLocaleString()}</div></div>`).join('') : '<div class="muted">No tool calls yet.</div>'; }
+    function renderTasks(tasks) { el('tasks-list').innerHTML = tasks.length ? tasks.map((task) => `<div class="task-item"><strong>${escapeHtml(task.title)}</strong><div class="muted">${new Date(task.created_at).toLocaleString()}</div></div>`).join('') : '<div class="muted">No tasks yet.</div>'; }
+
+    async function createWorkspace() {
+      const name = el('new-workspace').value.trim(); if (!name) return;
+      const workspace = await api('/api/workspaces', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ name }) });
+      el('new-workspace').value = ''; await loadWorkspaces(); await selectWorkspace(workspace.id, workspace.name);
+    }
+    async function uploadDocument() {
+      if (!activeWorkspace) return;
+      const file = el('doc-file').files[0]; if (!file) return;
+      const body = new FormData(); body.append('file', file);
+      const result = await api('/api/workspaces/' + encodeURIComponent(activeWorkspace) + '/documents', { method:'POST', body });
+      el('doc-file').value = ''; el('upload-status').textContent = result.message; await selectWorkspace(activeWorkspace, activeWorkspaceName);
+    }
+    async function sendChat() {
+      if (!activeWorkspace) return;
+      const question = el('chat-input').value.trim(); if (!question) return;
+      el('chat-error').textContent = ''; el('chat-input').value = '';
+      showAcceptedInput(question);
+      try { await api('/api/chat', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ workspace_id:activeWorkspace, question }) }); await selectWorkspace(activeWorkspace, activeWorkspaceName); }
+      catch (err) { el('chat-error').textContent = err.message; await selectWorkspace(activeWorkspace, activeWorkspaceName); }
+    }
+    function suggest(text) { el('chat-input').value = text; sendChat(); }
+    function escapeHtml(value) { return String(value ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+    function escapeAttr(value) { return escapeHtml(value).replace(/`/g,'&#96;'); }
+    el('chat-input').addEventListener('keydown', (event) => { if (event.key === 'Enter') sendChat(); });
+    el('new-workspace').addEventListener('keydown', (event) => { if (event.key === 'Enter') createWorkspace(); });
+    el('auth-password').addEventListener('keydown', (event) => { if (event.key === 'Enter') submitAuth('login'); });
+    checkAuth();
+  </script>
+</body>
+</html>
