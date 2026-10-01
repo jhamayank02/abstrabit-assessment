@@ -13,7 +13,10 @@ const sessions = new Map();
 
 const PORT = process.env.PORT || 3000;
 const DATABASE_URL = process.env.DATABASE_URL;
-const DATABASE_PATH = process.env.DATABASE_PATH || path.join(__dirname, 'assistant.db');
+const DEFAULT_SQLITE_PATH = process.env.RENDER
+  ? path.join('/tmp', 'assistant.db')
+  : path.join(__dirname, 'assistant.db');
+const DATABASE_PATH = process.env.DATABASE_PATH || DEFAULT_SQLITE_PATH;
 const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4.1-mini';
 
 const now = () => new Date().toISOString();
@@ -38,6 +41,22 @@ async function loadAgentsSdk() {
 let dbMode = 'sqlite';
 let pool = null;
 let sqliteDb = null;
+
+function resolveSqlitePath(databasePath) {
+  if (databasePath === ':memory:') return databasePath;
+  return path.isAbsolute(databasePath) ? databasePath : path.resolve(__dirname, databasePath);
+}
+
+function openSqliteDatabase(DatabaseSync) {
+  const resolvedPath = resolveSqlitePath(DATABASE_PATH);
+  if (resolvedPath !== ':memory:') {
+    fs.mkdirSync(path.dirname(resolvedPath), { recursive: true });
+  }
+  return {
+    db: new DatabaseSync(resolvedPath),
+    path: resolvedPath,
+  };
+}
 
 async function query(sql, params = []) {
   if (dbMode === 'pg') {
@@ -223,8 +242,9 @@ async function initDb() {
 
   if (dbMode === 'sqlite') {
     const { DatabaseSync } = require('node:sqlite');
-    sqliteDb = new DatabaseSync(DATABASE_PATH);
-    console.log('Using SQLite database at:', DATABASE_PATH);
+    const opened = openSqliteDatabase(DatabaseSync);
+    sqliteDb = opened.db;
+    console.log('Using SQLite database at:', opened.path);
 
     sqliteDb.exec(`
       CREATE TABLE IF NOT EXISTS users (

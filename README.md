@@ -42,7 +42,7 @@ DATABASE_PATH=assistant.db
 # DATABASE_URL=postgresql://postgres:postgres@localhost:5432/assistant
 ```
 
-`DATABASE_URL` is only for deployments that already provide free PostgreSQL. Without it, the app runs with local SQLite.
+`DATABASE_URL` is recommended for deployments. Without it, app runs local SQLite. On Render, the SQLite fallback uses `/tmp/assistant.db` so the service can boot, but data is ephemeral and may reset on restart. For persistent hosted data, set `DATABASE_URL` to a PostgreSQL connection string in Render environment variables.
 
 ## Demo Login
 
